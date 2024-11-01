@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Florida Counties Educational Information</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f7ff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .title {
+            color: #1e40af;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            font-size: 1.2em;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        #map-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        #info-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .county {
+            fill: #93c5fd;
+            stroke: white;
+            stroke-width: 1;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .county:hover {
+            fill: #60a5fa;
+        }
+
+        .county.selected {
+            fill: #2563eb;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            font-size: 14px;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .info-header {
+            color: #1e40af;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .info-section {
+            margin-bottom: 15px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #475569;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #1e293b;
+            margin-bottom: 15px;
+        }
+
+        .info-value a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .info-value a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">Florida School Districts</h1>
+            <p class="subtitle">Arts Education Information by County</p>
+        </header>
+
+        <div class="content">
+            <div id="map-container">
+                <div class="search-container">
+                    <input type="text" 
+                           class="search-input" 
+                           placeholder="Search for a county..."
+                           id="county-search">
+                </div>
+                <div class="tooltip" id="tooltip"></div>
+                <svg viewBox="0 0 800 1000" width="100%" height="auto" id="florida-map"></svg>
+            </div>
+
+            <div id="info-panel">
+                <h2 class="info-header">County Information</h2>
+                <div id="county-details">
+                    <p class="select-prompt">Select a county to view information</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/countyData.js"></script>
+    <script>
+        let selectedCountyId = null;
+
+        function initializeMap() {
+            const svg = document.getElementById('florida-map');
+            
+            // Create counties
+            Object.entries(countyData).forEach(([id, county]) => {
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute('d', county.path);
+                path.setAttribute('class', 'county');
+                path.setAttribute('id', id);
+                path.setAttribute('data-name', county.name);
+                
+                // Add event listeners
+                path.addEventListener('mouseenter', showTooltip);
+                path.addEventListener('mouseleave', hideTooltip);
+                path.addEventListener('click', () => selectCounty(id));
+                
+                svg.appendChild(path);
+            });
+        }
+
+        function showTooltip(event) {
+            const tooltip = document.getElementById('tooltip');
+            const countyName = event.target.getAttribute('data-name');
+            
+            tooltip.textContent = countyName + " County";
+            tooltip.style.display = 'block';
+            
+            const rect = event.target.getBoundingClientRect();
+            const mapContainer = document.getElementById('map-container');
+            const containerRect = mapContainer.getBoundingClientRect();
+            
+            tooltip.style.left = (rect.left - containerRect.left + rect.width/2) + 'px';
+            tooltip.style.top = (rect.top - containerRect.top - 30) + 'px';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        function selectCounty(countyId) {
+            // Remove previous selection
+            if (selectedCountyId) {
+                document.getElementById(selectedCountyId).classList.remove('selected');
+            }
+            
+            if (selectedCountyId !== countyId) {
+                document.getElementById(countyId).classList.add('selected');
+                selectedCountyId = countyId;
+                updateCountyInfo(countyId);
+            } else {
+                selectedCountyId = null;
+                clearCountyInfo();
+            }
+        }
+
+        function updateCountyInfo(countyId) {
+            const county = countyData[countyId];
+            const detailsDiv = document.getElementById('county-details');
+            
+            detailsDiv.innerHTML = `
+                <div class="info-section">
+                    <div class="info-label">County</div>
+                    <div class="info-value">${county.name} County</div>
+
+                    <div class="info-label">School District Website</div>
+                    <div class="info-value">
+                        <a href="${county.website}" target="_blank">${county.website}</a>
+                    </div>
+
+                    <div class="info-label">Arts Supervisor</div>
+                    <div class="info-value">${county.supervisor}</div>
+
+                    <div class="info-label">Contact Email</div>
+                    <div class="info-value">
+                        <a href="mailto:${county.email}">${county.email}</a>
+                    </div>
+
+                    <div class="info-label">Phone</div>
+                    <div class="info-value">${county.phone}</div>
+                </div>
+            `;
+        }
+
+        function clearCountyInfo() {
+            document.getElementById('county-details').innerHTML = 
+                '<p class="select-prompt">Select a county to view information</p>';
+        }
+
+        // Search functionality
+        document.getElementById('county-search').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            Object.entries(countyData).forEach(([id, county]) => {
+                const path = document.getElementById(id);
+                if (county.name.toLowerCase().includes(searchTerm)) {
+                    path.style.opacity = '1';
+                } else {
+                    path.style.opacity = '0.3';
+                }
+            });
+        });
+
+        // Initialize the map when the page loads
+        document.addEventListener('DOMContentLoaded', initializeMap);
+    </script>
+</body>
+</html>
